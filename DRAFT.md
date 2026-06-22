@@ -77,13 +77,109 @@ VS Code with some recommended extensions.
 
 ADE -> VS Code devcontainer.
 
-#### Git Flow
+#### Git Branching Strategy
 
-#### Code Ownership
+##### Common Practices
+
+Two branching strategies dominate the industry today. [Trunk-Based Development](https://www.atlassian.com/continuous-delivery/continuous-integration/trunk-based-development) is a modern, lightweight approach where all developers commit frequently to a single long-lived branch (usually `main`), relying on feature flags and a robust automated test suite to keep the codebase always deployable. It excels in SaaS and web application contexts where continuous deployment is the goal. [Gitflow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow), introduced by Vincent Driessen, takes a more structured approach built around parallel long-lived branches (`main` and `develop`), complemented by short-lived branches for features, releases, and hotfixes. It is designed to support explicit versioning, planned release cycles, and the ability to maintain multiple versions in production simultaneously.
+
+Our product is a multi-application software stack shipped and installed manually on customer hardware. This means we operate with formal release cycles, customers may run different versions in the field for extended periods, and we must be able to deliver patches to older releases without forcing a full upgrade. Trunk-Based Development is optimized for teams deploying to a single, centrally controlled environment many times per day — a model that does not match our delivery constraints. Gitflow, by contrast, was designed precisely for versioned, packaged software: it provides a clear separation between ongoing development work and release-ready code, a dedicated stabilization phase before shipping, and a structured mechanism for hotfixing production versions independently of new feature development.
+
+##### Gitflow Basics
+
+Gitflow revolves around two permanent branches: `main`, which always reflects production-ready code and is tagged with release version numbers, and `develop`, which serves as the integration branch for completed features. Day-to-day development happens on short-lived `feature/*` (e.g. `feature/FLS-2202-add-unknown-status-enum`) branches created from `develop` and merged back into it once complete.
+
+When a release is approaching, a `release/*` branch is cut from `develop` and tagged to allow final QA, bug fixes, and version bumping without blocking ongoing feature work. If there are bugs on the release branch, they get patched in a `bugfix/*` branch. Once validated, the release branch is merged into `main`, tagged (e.g. `v1.2.0`), and merged back into `develop`.
+
+If a critical bug is found in a shipped version, a `hotfix/*` branch is created directly from `main`, fixed, then merged into both `main` and `develop` to keep all branches in sync.
+
+For long-term maintenance of older major versions, `support/*` branches (e.g. `support/1.x`) are created from the relevant version tag, acting as a permanent `main` for that line and serving as the base for any further hotfixes and patch releases (i.e. when you need to release `v1.2.1` but `v2.0.0` is already out).
+
+Make sure to check out [Atlassian's article](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow) for a detailed presentation of the Gitflow workflow.
+
+![Gitflow Branch Diagram](assets/git-flow-4.svg)
+
+##### Integration with Bitbucket Server
+
+Bitbucket Server provides several repository settings that help enforce Gitflow discipline across the team. **Branch permissions** (under *Repository Settings → Branch Permissions*) should be configured to protect `main` and `develop`: restrict direct pushes so that all changes must go through a pull request, and require a minimum number of approvals before merging. **Branch name patterns** can be enforced to ensure developers follow the `feature/*`, `release/*`, and `hotfix/*` naming conventions, rejecting branches that do not match. **Merge checks** can be enabled to require successful builds and passing tests (reported via the build status API from your CI tool) before a pull request can be merged. Finally, **default reviewers** can be assigned per branch pattern, automatically adding the relevant team members as reviewers on pull requests targeting `develop` or `main`, ensuring nothing is merged without appropriate oversight.
+
+##### Gitflow for Multi-repos Project
+
+In a multi-repos setup, we have a meta-repo that holds a reference to all the sub-repos in the project (e.g. Git submodules, VCS Tool export).
+
+<!-- TODO: Write the full (non-automated) process. -->
+
+You've probably noticed that with Gitflow, we need to create a new branch in the meta-repo for each new branch in a sub-repo. This is unfortunately a lot of branching, but that's the cost of having full control and reproducibility over the release process. Instead of losing this control, we should focus on automating Gitflow.
+
+###### Feature Merge Hook
+
+We can set up a webhook in Bitbucket to run a Jenkins job when a sub-repo merges to `develop`:
+
+- clone meta-repo `develop` branch
+- update sub-repo ref to latest `develop`
+- commit & push changes to meta-repo `develop`
+
+With sub-repos as Git submodules, the job is as simple as:
+
+```bash
+#!/bin/bash
+# Triggered when a sub-repo merges to develop
+git clone url/to/meta-repo
+git clone --depth=1 --branch develop --single-branch --recurse-submodule --shallow-submodules
+cd path/to/meta-repo
+git checkout develop
+git submodule update --remote path/to/sub-repo
+git add path/to/sub-repo
+git commit -m "chore: update sub-repo to latest develop"
+git push origin develop
+```
+
+We could actually extend this "commit replication logic" for any branches that have the same name in the sub-repo and the meta-repo.
+
+###### Release Creation
+
+We can develop a script to help create the release branches on the meta-repo and the sub-repos that have changed.
+
+With sub-repos as Git submodules:
+
+- Creates `release/<meta-version>` from `develop`
+- Uses `git diff --submodule` to detect which sub-repos changed
+- For each: shows last \<sub-version\>, lists merged PRs, prompts you for the new \<sub-version\>, then creates `release/<sub-version>` from `develop` (if it does not already exist).
+
+#### Code Owners
+
+#### Why ?
+
+In large-scale software projects, it is not realistic to assume that every developer on the team knows everything about every piece of code we maintain and evolve. And even if one member of the team actually did, having them be responsible for the entire codebase is not realistic. This leads to slow and/or poor code reviews, frustrated developers, and stressed reviewers.
+
+One solution popular among software teams to ensure fast and high-quality reviews across the entire codebase is to elect code owners. Each code owner is responsible for a given part of the codebase. They do not have to be experts in the assigned code area at the time of election, but they will become so over time.
+
+#### What ?
+
+The code owner responsibilities over the assigned code area include:
+
+- Nurture long-term vision: follow product strategy, anticipate technical challenges, propose evolutions.
+- Manage tech debt: monitor code quality reports, organize quality-related work, review PRs.
+- Share knowledge: answer designers' and developers' questions, maintain high-level documentation if any.
+
+#### How ?
+
+Bitbucket allows us to define code owners for any path directly in the repository (see [documentation](https://confluence.atlassian.com/bitbucketserver0819/code-owners-1416825984.html)). Code owners will be automatically added to pull requests in the areas of the code base they own.
+
+#### Who ?
+
+> **ToDo**
+>
+> How we split the code base across the members of the teams still needs to be discussed. But the first step is probably to list all the repositories maintained by the team.
+>
+> - [ ] List maintained repositories
+> - [ ] Make a first ownership split proposal.
+> - [ ] Discuss the proposal with the team in a meeting.
+>
 
 #### Pull Request
 
-All code changes should be covered by a PR.
+**⚠️ All code changes should be covered by a PR.**
 
 ##### Prerequisites
 
@@ -97,23 +193,59 @@ All code changes should be covered by a PR.
 
 ##### Template
 
-<!-- TODO: Add examples to PR Template-->
-
 ```md
-## Context
+## 📖 Context
 
 > Give general context to reviewers and any reader from a distant future who might know nothing about you or what you are doing now. Explain why this PR was necessary in this context. This is basically a summary of the Jira ticket in your own words. You should mention if this PR has merge dependencies with another (e.g., "Do not merge this [this-repo#123]() before [other-repo#34]()").
 
-## Changes
+gRPC-related code is currently split across 3 repos:
+- _fls\_grpc\_interface_: proto files & custom compilation instructions for C++ and TypeScript
+- _ix\_fls_: ROS2 C++ server implementation, custom compilation instructions for Python, Python scripts for server testing
+- _fls-ihm_: TypeScript client implementation, duplicated/branched compilation instructions for TypeScript
+
+Some side effects of this current organization are:
+1. Mixing the language-agnostic proto definition of the API with implementation-specific stuff (i.e. CMakeLists.txt, package.json, yarn.lock) in the fls_grpc_interface repo.
+2. Having duplicated and stale files in the repos (e.g. compile-proto.sh is in both fls_grpc_interface and fls-ihm).
+3. Re-coding existing build logic (e.g. the incremental build in generate_proto.sh already exists in CMake).
+4. Re-building the C++ API library on every change to the server implementation (the linking of the C++ generated files is especially slow).
+5. Mixing integration test tooling in Python with the server implementation in C++ (implies some kind of dependency where the Python scripts are actually fully independent of the C++ generated code or even protoc built from source for C++).
+
+## 🔨 Changes
 
 > List the changes you made in the code. This can be as simple as the commit list if those were well segmented and described in the first place. Otherwise, this is your chance to make your work path understandable to reviewers without a full Git rebase. If you've made any design choices that were not already specified in the Jira ticket, you should at the very least state them, and ideally justify them. You should also state any limitations if they were not already noted in the Jira ticket.
 
-## Tests
+- Clean up fls_grpc_interface to include only the proto files.
+- Build the FLS gRPC C++ API as a separate ROS2 package (much like what we do for ROS messages and services).
+- Move the Python test scripts to a separate fls_grpc_tools repo.
 
-> Explain how to test your changes with steps and expected results (e.g., a screenshot or screen recording). When appropriate, it can be helpful to include a before/after comparison to help the reviewer understand the changes. Since you've already run the SonarQube analysis, it might be a good idea to add a link to the report here.
+## 🏁 Tests
+
+> Explain how to test your changes with steps and expected results (e.g. a screenshot or screen recording). When appropriate, it can be helpful to include a before/after comparison to help the reviewer understand the changes. Since you've already run the SonarQube analysis, it might be a good idea to add a link to the report here.
+
+### Changes in Proto files
+Reduced build time by 15% 🙂
+
+#### Before
+![Build output on proto file changes before PR](assets/proto_before.png)
+
+#### After
+![Build output on proto file changes after PR](assets/proto_after.png)
+
+### Changes in C++ sources
+Slashed build time by 50% 🔥
+
+#### Before
+![Build output on C++ file changes before PR](assets/cpp_before.png)
+
+#### After
+![Build output on C++ file changes after PR](assets/cpp_after.png)
 ```
 
-##### Flow
+##### Review Flow
+
+> **ToDo**
+>
+> Make a Mermaid chart for the review flow
 
 1. Author submits a PR following the template.
 2. Author requests a code review from GitHub Copilot.
@@ -121,12 +253,26 @@ All code changes should be covered by a PR.
 4. Author requests a review from at least one peer (ideally, one who contributed to that area of the code).
 5. Peer submits a review within 24 hours (otherwise, croissant for everyone 🥐).
 6. Author addresses the peer's review comments (schedule a face-to-face if questions arise).
-7. Peer approves the PR.
+7. Peer approves the PR (1/2 ✅).
 8. Author requests a review from at least one code owner.
 9. Code owner submits a review within 24 hours (otherwise, croissant for everyone 🥐).
 10. Author addresses the code owner's review comments (schedule a face-to-face if questions arise).
-11. Code owner approves the PR.
-12. Author merges the PR.
+11. Code owner approves the PR (2/2 ✅).
+12. Author merges the PR 🚀
+
+#### Release Creation
+
+##### FLS Soft
+
+> **ToDo**
+>
+> Explain how to create a new FLS IHM release candidate for QA.
+
+##### FLS IHM
+
+> **ToDo**
+>
+> Explain how to create a new FLS IHM release candidate for QA.
 
 #### Coding Style
 
@@ -196,6 +342,20 @@ Artifactory.
 
 Cannot use Bitbucket to publish a static website at the moment; need to discuss.
 
-##### Test 🧑‍🔬
+### Test 🧑‍🔬
 
 Try Zephyr for Jira (paid, but low-cost). Have a look at Qase (full-featured tool for QA).
+
+## People
+
+### Roles
+
+> **ToDo**
+>
+> List the roles involved in software lifecycle along with their responsibilities.
+
+### Team
+
+> **ToDo**
+>
+> List the persons involved in software lifecycle along with their roles.
