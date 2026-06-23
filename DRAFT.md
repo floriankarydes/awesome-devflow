@@ -33,7 +33,9 @@ Implement, connect, and validate the solution until it is release-ready.
 
 #### Integration
 
-#### QA Testing
+### Test 🧪
+
+<!-- TODO: Document various kind of tests: regression testing, smoke testing, feature testing, load testing ... -->
 
 ### Run 🚀
 
@@ -79,7 +81,7 @@ ADE -> VS Code devcontainer.
 
 #### Git Branching Strategy
 
-##### Common Practices
+##### Overview
 
 Two branching strategies dominate the industry today. [Trunk-Based Development](https://www.atlassian.com/continuous-delivery/continuous-integration/trunk-based-development) is a modern, lightweight approach where all developers commit frequently to a single long-lived branch (usually `main`), relying on feature flags and a robust automated test suite to keep the codebase always deployable. It excels in SaaS and web application contexts where continuous deployment is the goal. [Gitflow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow), introduced by Vincent Driessen, takes a more structured approach built around parallel long-lived branches (`main` and `develop`), complemented by short-lived branches for features, releases, and hotfixes. It is designed to support explicit versioning, planned release cycles, and the ability to maintain multiple versions in production simultaneously.
 
@@ -99,17 +101,89 @@ Make sure to check out [Atlassian's article](https://www.atlassian.com/git/tutor
 
 ![Gitflow Branch Diagram](assets/git-flow-4.svg)
 
-##### Integration with Bitbucket Server
-
-Bitbucket Server provides several repository settings that help enforce Gitflow discipline across the team. **Branch permissions** (under *Repository Settings → Branch Permissions*) should be configured to protect `main` and `develop`: restrict direct pushes so that all changes must go through a pull request, and require a minimum number of approvals before merging. **Branch name patterns** can be enforced to ensure developers follow the `feature/*`, `release/*`, and `hotfix/*` naming conventions, rejecting branches that do not match. **Merge checks** can be enabled to require successful builds and passing tests (reported via the build status API from your CI tool) before a pull request can be merged. Finally, **default reviewers** can be assigned per branch pattern, automatically adding the relevant team members as reviewers on pull requests targeting `develop` or `main`, ensuring nothing is merged without appropriate oversight.
-
 ##### Gitflow for Multi-repos Project
 
-In a multi-repos setup, we have a meta-repo that holds a reference to all the sub-repos in the project (e.g. Git submodules, VCS Tool export).
+In a multi-repo setup, we have a meta-repo that holds a reference to all the sub-repos in the project (e.g., Git submodules, VCS Tool export). With strict Gitflow, we need to create a new branch in the meta-repo for each new branch in a sub-repo.
+Now, features are propagating from the sub-repos, and releases are initiated from the meta-repo, so Gitflow can be simplified a bit. The following sections detail the "simplified" flow for each type of Gitflow action.
 
-<!-- TODO: Write the full (non-automated) process. -->
+###### Feature
 
-You've probably noticed that with Gitflow, we need to create a new branch in the meta-repo for each new branch in a sub-repo. This is unfortunately a lot of branching, but that's the cost of having full control and reproducibility over the release process. Instead of losing this control, we should focus on automating Gitflow.
+Features are used to introduce new changes in the development branch as part of the regular development process.
+
+- Create `feature/<jira-ticket>` branch from sub-repo(s) `develop`.
+- _Develop & review the feature._
+- Merge `feature/<jira-ticket>` branch into sub-repo(s) `develop`.
+- Update sub-repo(s) reference(s) in meta-repo `develop` to target the merge commit on sub-repo(s) `develop`.
+- Commit changes to meta-repo `develop` with message `"chore: merge feature <jira-ticket>"`.
+
+###### Release
+
+In a multi-repo setup, making a release means releasing any changes in the sub-repos with their own individual sub-version numbers, then releasing a new combination of sub-repo versions as a meta-version. Release bumps at least one minor version.
+
+- Create `release/<meta-version>` branch from meta-repo `develop`.
+- Generate the changelogs for the meta-repo and each sub-repo with changes.
+- Draft the release notes with the version bumps.
+- Create `release/<sub-version>` branch from `develop` for each sub-repo with changes.
+- Bump the version, if any, in all created `release/*` branches.
+- Update sub-repo reference(s) to the last commit, if any, on sub-repo `release/<sub-version>`.
+- Commit changes to the meta-repo `release/<meta-version>` with the message `"chore: merge candidate <meta-version>"` and tag `v<meta-version>-rc.1`.
+- _Validate the release with the QA full test suite._ If not approved, do bug fixes.
+- Edit the release notes. <!-- TODO: Checkout how to document release in Jira+Bitbucket. -->
+- Merge sub-repo `release/<sub-version>` into `main` (ff-only) and tag with `v<sub-version>`.
+- Merge newly released sub-repos `main` back into `develop`. <!-- No commit required with ff-only: - Update sub-repo reference(s) to the last release tag on sub-repo `main`. - Commit changes to the meta-repo `release/<meta-version>` with the message `"chore: release <meta-version>"` -->
+- Merge `release/<meta-version>` into `main` (ff-only) and tag with `v<meta-version>`.
+- Merge the newly released meta-repo `main` back into `develop`.
+
+###### Bug Fix
+
+Bug fixes are used to fix bugs against a release branch. The process is the same as for a feature, targeting the `release/*` branch instead of `develop`. A bug fix bumps the `rc` (release candidate) number.
+
+- Create a `bugfix/<jira-ticket>` branch from sub-repo(s) `release/<sub-version>`.
+- _Develop & review the bug fix._
+- Merge the `bugfix/<jira-ticket>` branch into sub-repo(s) `release/<sub-version>`.
+- Merge the `bugfix/<jira-ticket>` branch into sub-repo(s) `develop`.
+- Update sub-repo(s) reference(s) to the last commit (if any) on sub-repo(s) `release/<sub-version>`.
+- Commit changes to meta-repo `release/<meta-version>` with the message `"chore: merge bugfix <jira-ticket>"` and tag `v<meta-version>-rc.<rc-number>`.
+
+###### Hot Fix
+
+Hotfixes are used to quickly fix the production branch. From a Gitflow perspective, they combine a feature and a release in one step. A hotfix bumps the patch version.
+
+- Create `hotfix/<meta-version>` branch from meta-repo `main`.
+- Create `hotfix/<sub-version>` branch from `main` for each sub-repo with bugs.
+- _Develop & review the hotfix._
+- Bump the version in all created `hotfix/*` branches.
+- Update sub-repo reference(s) in meta-repo `hotfix/<meta-version>` to target the last commit on sub-repo `hotfix/<sub-version>`.
+- Commit changes to meta-repo `hotfix/<sub-version>` with message `"chore: merge hotfix <meta-version>"` and tag `v<meta-version>-rc.<rc-number>`.
+- _Validate the hotfix with the QA limited test suite._ If not approved, do bug fixes.
+- Edit release notes.
+- Merge sub-repo `hotfix/<sub-version>` into `main` (ff-only) and tag with `v<sub-version>`.
+- Merge newly released sub-repo `main` back into `develop`.<!-- No commit required with ff-only: - Update sub-repo reference(s) to the last release tag on sub-repo `main`. - Commit changes to meta-repo `hotfix/<meta-version>` with message `"chore: patch <meta-version>"` -->
+- Merge `release/<meta-version>` into `main` (ff-only) and tag with `v<meta-version>`.
+- Merge newly released meta-repo `main` back into `develop`.
+
+###### Support
+
+Support is used to bring fixes to older major releases. It is similar to hotfixes, but it will never get merged back into `main`. Support bumps the patch version.
+
+- Create `support/<meta-major-version>.x` branch from the last tag `v<meta-major-version>.*.*`.
+- Create `support/<meta-major-version>.x` branch from the related `v<sub-major-version>.*.*` for each sub-repo that requires changes.
+- _Develop & review the support patch._
+- Bump the version in all created `support/*` branches.
+- Update sub-repo references in meta-repo `support/<meta-version>` to target the last commit on sub-repo `support/<sub-version>`.
+- Commit changes to meta-repo `support/<sub-version>` with message `"chore: merge support <meta-version>"` and tag `v<meta-version>-rc.<rc-number>`.
+- _Validate the hotfix with the QA limited test suite._ If not approved, do a bug fix.
+- Edit the release notes.
+- Tag each `support/<sub-version>` with `v<sub-version>`.
+- Tag `support/<meta-version>` with `v<meta-version>`.
+
+##### Gitflow Automation
+
+You've probably noticed that Gitflow, unfortunately, involves some overhead, but that's the cost of having full control and reproducibility over the release process. Instead of losing this very valuable control, we should focus on automating Gitflow.
+
+###### Bitbucket Settings
+
+Bitbucket Server provides several repository settings that help enforce Gitflow discipline across the team. **Branch permissions** (under _Repository Settings → Branch Permissions_) should be configured to protect `main` and `develop`: restrict direct pushes so that all changes must go through a pull request, and require a minimum number of approvals before merging. **Branch name patterns** can be enforced to ensure developers follow the `feature/*`, `release/*`, `bugfix/*`, `hotfix/*`, and `support/*` naming conventions, rejecting branches that do not match. **Merge checks** can be enabled to require successful builds and passing tests (reported via the build status API from your CI tool) before a pull request can be merged. Finally, **default reviewers** can be assigned per branch pattern, automatically adding the relevant team members as reviewers on pull requests targeting `develop` or `main`, ensuring nothing is merged without appropriate oversight.
 
 ###### Feature Merge Hook
 
@@ -136,7 +210,7 @@ git push origin develop
 
 We could actually extend this "commit replication logic" for any branches that have the same name in the sub-repo and the meta-repo.
 
-###### Release Creation
+###### Release Creation Script
 
 We can develop a script to help create the release branches on the meta-repo and the sub-repos that have changed.
 
@@ -145,6 +219,10 @@ With sub-repos as Git submodules:
 - Creates `release/<meta-version>` from `develop`
 - Uses `git diff --submodule` to detect which sub-repos changed
 - For each: shows last \<sub-version\>, lists merged PRs, prompts you for the new \<sub-version\>, then creates `release/<sub-version>` from `develop` (if it does not already exist).
+
+#### Git Best Practices
+
+<!-- TODO: List general practice (e.g. branch naming, commit messages, merge strategy, history-rewrite, branch deletion, stale branch policy) -->
 
 #### Code Owners
 
@@ -261,6 +339,8 @@ Slashed build time by 50% 🔥
 12. Author merges the PR 🚀
 
 #### Release Creation
+
+##### Release Notes Templates
 
 ##### FLS Soft
 
