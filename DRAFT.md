@@ -1,7 +1,13 @@
 # Awesome Dev Flow :dark_sunglasses:
 <!-- markdownlint-disable MD024 -->
 
+> **🚧 THIS IS A WORK IN PROGRESS 🚧**
+
 ## Workflow
+
+> **ToDo**
+>
+> Draw a workflow diagram with Mermaid and details all the steps in the related section. Any methodology and tooling details should be extracted to the [Tools & Practices](#tools--practices) sections. This section focus on what are the steps, why we need those steps and are the I/O of steps.
 
 ### Think 💡
 
@@ -10,6 +16,8 @@ Decide what to build, why it matters, and how delivery will be organized.
 #### Discovery
 
 #### Scoping
+
+#### Acceptance Criteria
 
 #### Planning
 
@@ -25,6 +33,8 @@ Define the user experience and the technical blueprint before coding starts.
 
 #### Technical Draft
 
+#### Test Plan
+
 ### Build 🛠️
 
 Implement, connect, and validate the solution until it is release-ready.
@@ -33,9 +43,7 @@ Implement, connect, and validate the solution until it is release-ready.
 
 #### Integration
 
-### Test 🧪
-
-<!-- TODO: Document various kind of tests: regression testing, smoke testing, feature testing, load testing ... -->
+#### Validation
 
 ### Run 🚀
 
@@ -51,6 +59,10 @@ Launch safely, enable users and teams, and ensure smooth operations.
 
 ### Manage 🧑‍🍳
 
+> **ToDo**
+>
+> Define how we document the work to be done and monitor the work that have been done in Jira.
+
 #### Ticket Lifecycles
 
 #### Ticket Templates
@@ -63,11 +75,11 @@ Just pen and paper, really.
 
 #### App Prototype
 
-Penpot.
+Try Penpot.
 
 #### API Specs
 
-Insomnia.
+Try Insomnia.
 
 ### Develop 🧑‍💻
 
@@ -78,6 +90,10 @@ VS Code with some recommended extensions.
 #### Environment
 
 ADE -> VS Code devcontainer.
+
+#### Project Structure
+
+<!-- TODO: Explain what the current multi-repos project structure is now, and what it should be for easier and cleaner integration process. This is a 3 steps path: (1) Current state; (2) Structured Distribution Build; (3) Structured Package Build -->
 
 #### Git Branching Strategy
 
@@ -228,28 +244,49 @@ With sub-repos as Git submodules:
 
 #### Git Best Practices
 
-<!-- TODO: List general practice (e.g. branch naming, commit messages, merge strategy, history-rewrite, branch deletion, stale branch policy) -->
-
 ##### Branches & Tags
 
-- Branch names are all lowercase and spaces get sanitized as dash (e.g. `FLS-2345 Create my Feature` -> `feature/fls-2345-create-my-feature`).
-- `feature/*` and `bugfix/*` branches start with the Jira ticket number (e.g. `feature/fls-2345-create-my-feature`).
-- `release/*`, `hotfix/*` and `support/*` branches match the target version number (e.g. `release/2.3.0`, `hotfix/2.3.1`, `support/1.5.12`).
-- Version tags always start with `v` (e.g. `v2.3.1`).
-- Release candidates (RC) sent for QA validation are tagged with target version number and the RC iteration prefixed with `-rc.` (e.g. `v2.3.1-rc.2` after a first bug fix).
+- Branch names must be lowercase, and spaces must be sanitized as dashes (e.g. `FLS-2345 Create my Feature` -> `feature/fls-2345-create-my-feature`).
+- `feature/*` and `bugfix/*` branches must start with the Jira ticket number (e.g. `feature/fls-2345-create-my-feature`).
+- `release/*`, `hotfix/*`, and `support/*` branches must match the target version number (e.g. `release/2.3.0`, `hotfix/2.3.1`, `support/1.5.12`).
+- Version tags must start with `v` (e.g. `v2.3.1`).
+- Release candidates (RCs) sent for QA validation must be tagged with the target version number followed by the RC iteration, prefixed with `-rc.` (e.g. `v2.3.1-rc.2` after a second release candidate).
 
 ##### Commits
 
-- Commit messages follow the [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) specification with scope set to the 
+- Commit must be atomic.
+- Commit message must explain what and why, not how.
+- Commit message must follow the [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) specification:
+  
+  ```txt
+  <type>(<scope>)[optional <!>]: <description>
+
+  [optional <body>]
+  ```
+
+- Scope must be set to the Jira ticket (e.g. `fix(FLS-4567): correct typo in ANMF logs`).
+- Breaking changes must be flagged by a `!` placed after the scope (e.g. `feat(FLS-2475)!: retire exail/control/configuration/v1 service`).
+- Type must be one of: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`.
+- Description should be under 50 characters.
+- Description must start with lowercase.
+- Description must not end with a period.
+- Description must use imperative mood.
+- Body should be wrapped at 72 characters.
+
+For more guidance, make sure to check out [Git Commit Message: The Rules, Examples, and Conventions](https://www.datacamp.com/tutorial/git-commit-message) by Dario Radečić.
 
 ##### Merges
 
-- All branche merges must go through a pull request.
-- ...
+- Merges must go through a pull request.
+- Merges to `main` and `support/*` should be fast-forward (`--ff`).
+- Merges to any other branch must have a merge commit (`--no-ff`).
+- The source branches must be deleted on merge.
 
 ##### Housekeeping
 
-- ...
+- History rewrite (i.e. `push --force`) is strictly forbidden on production and development branches (e.g. `main` and `develop`).
+- PRs that have been stale for more than 6 months must be closed.
+- Short-lived branches (i.e. `feature/*`, `release/*`, `bugfix/*`, and `hotfix/*`) older than 3 months without an open PR must be deleted.
 
 #### Code Owners
 
@@ -284,9 +321,9 @@ Bitbucket allows us to define code owners for any path directly in the repositor
 
 #### Pull Request
 
-> This only cover pull requests to be submitted for code review. For pull request created for QA testing as part of the release process, see []().
+> This only cover pull requests to be submitted for code review. For pull request created for QA testing as part of the release process, see [Release Request](#release-request).
 
-⚠️ All code changes to be merged from a should be covered by a PR.
+⚠️ All code changes to be merged a should be covered by a PR.
 
 ##### Prerequisites
 
@@ -375,11 +412,11 @@ Slashed build time by 50% 🔥
 
 ##### Release Flow
 
-##### Release Ticket Template
+##### Release Ticket
 
-##### Release Notes Template
+##### Release Notes
 
-##### Release Request Template
+##### Release Request
 
 #### Coding Style
 
@@ -455,7 +492,37 @@ Cannot use Bitbucket to publish a static website at the moment; need to discuss.
 
 Combination of custom bash script, docker-compose and Ansible. Not quite sure what's actually happening here right now.
 
-### Test 🧑‍🔬
+### QA 🧑‍🔬
+
+#### Testing Life Cycle
+
+##### Requirement Analysis
+
+##### Planning
+
+##### Test Case Development
+
+##### Environment Setup
+
+##### Execution
+
+#### Test Levels
+
+##### Unit Tests
+
+##### Integration Tests
+
+##### Feature Tests (E2E)
+
+#### Test Scopes
+
+##### Regression Tests
+
+##### Smoke Tests
+
+##### Load Tests
+
+#### Test Environment & Tools
 
 Try Zephyr for Jira (paid, but low-cost). Have a look at Qase (full-featured tool for QA).
 
@@ -472,3 +539,51 @@ Try Zephyr for Jira (paid, but low-cost). Have a look at Qase (full-featured too
 > **ToDo**
 >
 > List the persons involved in software lifecycle along with their roles.
+
+### Performance Review
+
+> **ToDo**
+>
+> Introduce what are performance review and why we need it.
+
+#### Review Cycle
+
+> **ToDo**
+>
+> Define the performance cycle (i.e. who review what/who and when and shared with who).
+
+#### Self Evaluation
+
+> **ToDo**
+>
+> Introduce what are self evaluation and why we need it.
+
+##### Template
+
+> **ToDo**
+>
+> Propose some structure for the self evaluation (i.e. a list of open questions to develop on your achievements, your "failure" and your goals; then some question to rank performance).
+
+##### Writing Tips
+
+> **ToDo**
+>
+> each how to write accurate evaluation that demonstrate the value you add to the team and identify any room for improvement. This should be you chance to build a case for a promotion and/or a change of role.
+
+#### Peer Feedback
+
+> **ToDo**
+>
+> Introduce what are peer feedback review and why we need it.
+
+#### Template
+
+> **ToDo**
+>
+> Propose some structure for the feedback (i.e. a list of open questions to develop and some ).
+
+##### Writing Tips
+
+> **ToDo**
+>
+> Teach how to deliver actionable and valuable feedback.
